@@ -1,0 +1,10 @@
+[project]
+name = "wemos-dashboard-pc"
+version = "0.1.0"
+description = "MQTT subscriber and CSV logger for Wemos D1 Mini IoT dashboard"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "paho-mqtt>=2.1.0",
+    "python-dotenv>=1.0.1",
+]
