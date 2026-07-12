@@ -6,138 +6,200 @@ ESP8266WebServer server(80);
 
 const char PAGE[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
-<html lang="en">
+<html lang="it">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DHT22 Monitor</title>
+<title>Monitor DHT22</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
   :root{
-    --bg:#151922;
-    --surface:#1d2330;
-    --surface-2:#242b3a;
+    --bg:#12151c;
+    --surface:#1a1f2a;
+    --surface-2:#222939;
     --text:#EDEBE4;
-    --muted:#8890A0;
+    --muted:#818a9c;
     --temp:#E8A755;
     --hum:#5BC0BE;
-    --line:#2A3040;
+    --line:#272e3f;
+    --good:#6FCF97;
+    --bad:#E8687A;
   }
   *{box-sizing:border-box;}
   html,body{
     margin:0;padding:0;
     background:
-      radial-gradient(circle at 15% -10%, rgba(232,167,85,0.10), transparent 45%),
-      radial-gradient(circle at 90% 0%, rgba(91,192,190,0.10), transparent 45%),
+      radial-gradient(circle at 12% -10%, rgba(232,167,85,0.09), transparent 45%),
+      radial-gradient(circle at 92% 0%, rgba(91,192,190,0.09), transparent 45%),
       var(--bg);
     color:var(--text);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     min-height:100vh;
   }
-  .wrap{max-width:820px;margin:0 auto;padding:32px 20px 56px;}
+  .wrap{max-width:860px;margin:0 auto;padding:32px 20px 56px;}
 
+  .topbar{
+    display:flex;align-items:flex-start;justify-content:space-between;
+    margin-bottom:30px;gap:12px;
+  }
   .eyebrow{
     font-size:11px;letter-spacing:.18em;text-transform:uppercase;
-    color:var(--muted);margin:0 0 4px;
+    color:var(--muted);margin:0 0 6px;
   }
   h1{
-    font-size:22px;margin:0 0 28px;font-weight:600;letter-spacing:-.01em;
-    display:flex;align-items:center;gap:10px;
+    font-size:22px;margin:0;font-weight:600;letter-spacing:-.01em;
+  }
+  .chip{
+    display:flex;align-items:center;gap:7px;
+    font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--muted);
+    background:var(--surface);border:1px solid var(--line);
+    border-radius:100px;padding:6px 12px 6px 10px;
+    white-space:nowrap;margin-top:2px;
   }
   .dot{
-    width:8px;height:8px;border-radius:50%;background:var(--hum);
-    box-shadow:0 0 0 0 rgba(91,192,190,.6);
+    width:7px;height:7px;border-radius:50%;background:var(--good);
+    box-shadow:0 0 0 0 rgba(111,207,151,.6);
     animation:pulse 2s infinite;
+    flex-shrink:0;
   }
+  .dot.off{background:var(--bad);animation:none;box-shadow:none;}
   @keyframes pulse{
-    0%{box-shadow:0 0 0 0 rgba(91,192,190,.55);}
-    70%{box-shadow:0 0 0 8px rgba(91,192,190,0);}
-    100%{box-shadow:0 0 0 0 rgba(91,192,190,0);}
+    0%{box-shadow:0 0 0 0 rgba(111,207,151,.55);}
+    70%{box-shadow:0 0 0 7px rgba(111,207,151,0);}
+    100%{box-shadow:0 0 0 0 rgba(111,207,151,0);}
   }
 
-  .stats{
+  .dials{
     display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;
   }
-  .stat{
+  .dial-card{
     background:var(--surface);
     border:1px solid var(--line);
-    border-radius:16px;
-    padding:22px 22px 18px;
-    position:relative;overflow:hidden;
+    border-radius:18px;
+    padding:22px;
+    display:flex;align-items:center;gap:18px;
   }
-  .stat .label{
+  .dial{
+    position:relative;
+    width:104px;height:104px;flex-shrink:0;
+    border-radius:50%;
+    background:conic-gradient(var(--ring-color,var(--temp)) calc(var(--pct,0)*1%), var(--surface-2) 0);
+    display:flex;align-items:center;justify-content:center;
+    transition:background 0.6s ease;
+  }
+  .dial::before{
+    content:"";
+    position:absolute;inset:9px;
+    background:var(--surface);
+    border-radius:50%;
+  }
+  .dial .reading{
+    position:relative;z-index:1;
+    font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;
+    font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;
+    text-align:center;line-height:1.1;
+  }
+  .dial .reading sup{font-size:11px;font-weight:500;color:var(--muted);}
+  .dial-card.temp .dial{--ring-color:var(--temp);}
+  .dial-card.hum .dial{--ring-color:var(--hum);}
+  .dial-card.temp .reading{color:var(--temp);}
+  .dial-card.hum .reading{color:var(--hum);}
+
+  .dial-meta .label{
     font-size:11px;letter-spacing:.14em;text-transform:uppercase;
-    color:var(--muted);margin-bottom:10px;
+    color:var(--muted);margin-bottom:6px;
   }
-  .stat .value{
-    font-size:44px;font-weight:700;letter-spacing:-.02em;
-    font-variant-numeric:tabular-nums;line-height:1;
+  .dial-meta .range{
+    font-size:12px;color:var(--muted);
+    font-variant-numeric:tabular-nums;
   }
-  .stat .value sup{font-size:20px;font-weight:500;margin-left:2px;color:var(--muted);}
-  .stat.temp .value{color:var(--temp);}
-  .stat.hum .value{color:var(--hum);}
-  .bar{
-    margin-top:16px;height:3px;border-radius:2px;background:var(--surface-2);overflow:hidden;
+  .dial-meta .trend{
+    font-size:12px;margin-top:4px;font-weight:600;
   }
-  .bar i{
-    display:block;height:100%;border-radius:2px;
-    transition:width .6s ease;
-  }
-  .stat.temp .bar i{background:linear-gradient(90deg,#E8A755,#f2c98a);}
-  .stat.hum .bar i{background:linear-gradient(90deg,#5BC0BE,#8fdbd9);}
+  .trend.up{color:var(--temp);}
+  .trend.down{color:var(--hum);}
+  .trend.flat{color:var(--muted);font-weight:400;}
 
   .panel{
     background:var(--surface);
     border:1px solid var(--line);
-    border-radius:16px;
+    border-radius:18px;
     padding:20px 20px 8px;
+  }
+  .panel-head{
+    display:flex;align-items:baseline;justify-content:space-between;
+    margin-bottom:14px;
   }
   .panel .label{
     font-size:11px;letter-spacing:.14em;text-transform:uppercase;
-    color:var(--muted);margin-bottom:12px;
+    color:var(--muted);
   }
+  .panel .sub{font-size:11px;color:var(--muted);}
   canvas{width:100%!important;}
 
   footer{
-    margin-top:20px;text-align:center;font-size:11px;color:var(--muted);
+    margin-top:22px;text-align:center;font-size:11px;color:var(--muted);
     letter-spacing:.04em;
   }
-  footer span{color:var(--text);}
+  footer .ip{
+    font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;
+    color:var(--text);
+  }
 
   @media (max-width:480px){
-    .stats{grid-template-columns:1fr;}
-    .stat .value{font-size:38px;}
+    .dials{grid-template-columns:1fr;}
+    .dial-card{padding:18px;}
   }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <p class="eyebrow">Wemos D1 Mini &middot; DHT22</p>
-  <h1><span class="dot"></span>Sensor Monitor</h1>
-
-  <div class="stats">
-    <div class="stat temp">
-      <div class="label">Temperature</div>
-      <div class="value" id="t">--<sup>&deg;C</sup></div>
-      <div class="bar"><i id="tbar" style="width:0%"></i></div>
+  <div class="topbar">
+    <div>
+      <p class="eyebrow">Wemos D1 Mini &middot; DHT22</p>
+      <h1>Monitor Sensore</h1>
     </div>
-    <div class="stat hum">
-      <div class="label">Humidity</div>
-      <div class="value" id="h">--<sup>%</sup></div>
-      <div class="bar"><i id="hbar" style="width:0%"></i></div>
+    <div class="chip"><span class="dot" id="statusDot"></span><span id="status">connessione&hellip;</span></div>
+  </div>
+
+  <div class="dials">
+    <div class="dial-card temp">
+      <div class="dial" id="tdial">
+        <div class="reading" id="t">--<sup>&deg;C</sup></div>
+      </div>
+      <div class="dial-meta">
+        <div class="label">Temperatura</div>
+        <div class="range" id="trange">min -- &middot; max --</div>
+        <div class="trend flat" id="ttrend">stabile</div>
+      </div>
+    </div>
+    <div class="dial-card hum">
+      <div class="dial" id="hdial">
+        <div class="reading" id="h">--<sup>%</sup></div>
+      </div>
+      <div class="dial-meta">
+        <div class="label">Umidit&agrave;</div>
+        <div class="range" id="hrange">min -- &middot; max --</div>
+        <div class="trend flat" id="htrend">stabile</div>
+      </div>
     </div>
   </div>
 
   <div class="panel">
-    <div class="label">Last 20 readings</div>
+    <div class="panel-head">
+      <div class="label">Ultime 20 letture</div>
+      <div class="sub">ogni 2s</div>
+    </div>
     <canvas id="c" height="130"></canvas>
   </div>
 
-  <footer>Updates every 2s &middot; <span id="status">connecting&hellip;</span></footer>
+  <footer>Lettura ogni 2s da <span class="ip" id="host">device</span></footer>
 </div>
 
 <script>
 let tdata=[], hdata=[], labels=[];
+document.getElementById('host').textContent=location.host;
 
 const ctx=document.getElementById('c');
 const chart=new Chart(ctx,{
@@ -146,14 +208,14 @@ const chart=new Chart(ctx,{
     labels:labels,
     datasets:[
       {
-        label:'Temp (°C)',
+        label:'Temp. (°C)',
         data:tdata,
         borderColor:'#E8A755',
         backgroundColor:'rgba(232,167,85,0.12)',
         tension:0.35,
         pointRadius:3,
         pointHoverRadius:5,
-        pointBackgroundColor:'#151922',
+        pointBackgroundColor:'#12151c',
         pointBorderColor:'#E8A755',
         pointBorderWidth:2,
         borderWidth:2,
@@ -161,14 +223,14 @@ const chart=new Chart(ctx,{
         yAxisID:'y'
       },
       {
-        label:'Humidity (%)',
+        label:'Umidità (%)',
         data:hdata,
         borderColor:'#5BC0BE',
         backgroundColor:'rgba(91,192,190,0.10)',
         tension:0.35,
         pointRadius:3,
         pointHoverRadius:5,
-        pointBackgroundColor:'#151922',
+        pointBackgroundColor:'#12151c',
         pointBorderColor:'#5BC0BE',
         pointBorderWidth:2,
         borderWidth:2,
@@ -183,20 +245,20 @@ const chart=new Chart(ctx,{
     interaction:{intersect:false,mode:'index'},
     plugins:{
       legend:{
-        labels:{color:'#8890A0',boxWidth:10,boxHeight:10,usePointStyle:true,pointStyle:'circle'}
+        labels:{color:'#818a9c',boxWidth:10,boxHeight:10,usePointStyle:true,pointStyle:'circle'}
       }
     },
     scales:{
       x:{display:false},
       y:{
         position:'left',
-        grid:{color:'#242b3a'},
-        ticks:{color:'#8890A0'}
+        grid:{color:'#222939'},
+        ticks:{color:'#818a9c'}
       },
       y1:{
         position:'right',
         grid:{display:false},
-        ticks:{color:'#8890A0'}
+        ticks:{color:'#818a9c'}
       }
     }
   }
@@ -214,6 +276,17 @@ function pad(arr,minPad){
   return {lo,hi};
 }
 
+function setTrend(el,delta,upWord,downWord){
+  el.classList.remove('up','down','flat');
+  if(Math.abs(delta)<0.05){
+    el.classList.add('flat'); el.textContent='stabile';
+  }else if(delta>0){
+    el.classList.add('up'); el.textContent='in salita · +'+delta.toFixed(1);
+  }else{
+    el.classList.add('down'); el.textContent='in discesa · '+delta.toFixed(1);
+  }
+}
+
 async function u(){
   try{
     let r=await fetch('/data');
@@ -221,9 +294,13 @@ async function u(){
 
     document.getElementById('t').innerHTML=d.temp+'<sup>&deg;C</sup>';
     document.getElementById('h').innerHTML=d.hum+'<sup>%</sup>';
-    document.getElementById('tbar').style.width=Math.min(100,Math.max(0,(d.temp/40)*100))+'%';
-    document.getElementById('hbar').style.width=Math.min(100,Math.max(0,d.hum))+'%';
+    document.getElementById('tdial').style.setProperty('--pct',Math.min(100,Math.max(0,(d.temp/40)*100)));
+    document.getElementById('hdial').style.setProperty('--pct',Math.min(100,Math.max(0,d.hum)));
     document.getElementById('status').textContent='live';
+    document.getElementById('statusDot').classList.remove('off');
+
+    let prevT=tdata.length?tdata[tdata.length-1]:d.temp;
+    let prevH=hdata.length?hdata[hdata.length-1]:d.hum;
 
     labels.push('');
     tdata.push(d.temp);
@@ -234,10 +311,17 @@ async function u(){
     let hr=pad(hdata,2);
     chart.options.scales.y.min=tr.lo; chart.options.scales.y.max=tr.hi;
     chart.options.scales.y1.min=hr.lo; chart.options.scales.y1.max=hr.hi;
-
     chart.update();
+
+    let tmin=Math.min(...tdata).toFixed(1), tmax=Math.max(...tdata).toFixed(1);
+    let hmin=Math.min(...hdata).toFixed(1), hmax=Math.max(...hdata).toFixed(1);
+    document.getElementById('trange').innerHTML='min '+tmin+'&deg; &middot; max '+tmax+'&deg;';
+    document.getElementById('hrange').innerHTML='min '+hmin+'% &middot; max '+hmax+'%';
+    setTrend(document.getElementById('ttrend'),d.temp-prevT);
+    setTrend(document.getElementById('htrend'),d.hum-prevH);
   }catch(e){
-    document.getElementById('status').textContent='connection lost';
+    document.getElementById('status').textContent='connessione persa';
+    document.getElementById('statusDot').classList.add('off');
   }
 }
 setInterval(u,2000);
