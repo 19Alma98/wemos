@@ -100,7 +100,10 @@ Edit `src/config.h`:
 
 ### Build and Upload
 
-```bash
+PlatformIO core path added to user PATH (`%USERPROFILE%\.platformio\penv\Scripts`). Open a **new** terminal for it to take effect, then from `firmware/`:
+
+```powershell
+cd firmware
 pio run
 pio run --target upload
 ```
@@ -110,6 +113,8 @@ pio run --target upload
 ```bash
 pio device monitor
 ```
+
+Serial monitor prints the assigned IP (`IP assegnato: 192.168.x.x`) — that's the dashboard URL.
 
 Expected startup output:
 
