@@ -7,6 +7,8 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-decimation"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
@@ -144,6 +146,12 @@
     color:var(--text);padding:7px 10px;font-size:13px;font-family:inherit;
     color-scheme:dark;
   }
+  .reset-zoom-btn{
+    background:var(--surface-2);border:1px solid var(--line);border-radius:100px;
+    color:var(--muted);font-size:11px;letter-spacing:.04em;padding:4px 10px;
+    cursor:pointer;font-family:inherit;
+  }
+  .reset-zoom-btn:hover{color:var(--text);border-color:var(--muted);}
   .chart-msg{
     text-align:center;color:var(--muted);font-size:13px;
     padding:40px 0;
@@ -210,7 +218,10 @@
   <div class="panel">
     <div class="panel-head">
       <div class="label">Andamento</div>
-      <div class="sub" id="chartSub">&nbsp;</div>
+      <div style="display:flex;align-items:baseline;gap:10px;">
+        <div class="sub" id="chartSub">&nbsp;</div>
+        <button id="resetZoom" class="reset-zoom-btn" type="button">reset zoom</button>
+      </div>
     </div>
     <canvas id="c" height="130"></canvas>
     <div class="chart-msg" id="chartMsg" style="display:none;"></div>
@@ -255,12 +266,23 @@ function defaultRange(){
   return {start, end};
 }
 
-function isoDate(d){ return d.toISOString().slice(0,10); }
+function isoDate(d){
+  const p = n => String(n).padStart(2,'0');
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());
+}
+
+function isEndToday(end){
+  const now = new Date();
+  return end.getFullYear()===now.getFullYear() &&
+         end.getMonth()===now.getMonth() &&
+         end.getDate()===now.getDate();
+}
 
 async function onRangeChange(){
   const startEl = document.getElementById('startDate');
   const endEl = document.getElementById('endDate');
-  const start = new Date(startEl.value + 'T00:00:00');
+  // local-time bounds: the date picker shows local days, so the query must too
+  const start = new Date(startEl.value + 'T00:00:00.000');
   const end = new Date(endEl.value + 'T23:59:59.999');
   if(start > end) return;
   currentRange = {start, end};
@@ -269,11 +291,13 @@ async function onRangeChange(){
 }
 
 async function refreshRangeStats(start, end){
-  const { data, error } = await sb
+  let q = sb
     .from(TABLE)
     .select('temp,hum')
-    .gte('created_at', start.toISOString())
-    .lte('created_at', end.toISOString());
+    .gte('created_at', start.toISOString());
+  // open-ended when the range reaches today, so rows written after page load are included
+  if(!isEndToday(end)) q = q.lte('created_at', end.toISOString());
+  const { data, error } = await q;
   if(error || !data || data.length===0){
     document.getElementById('trange').innerHTML='min -- &middot; max --';
     document.getElementById('hrange').innerHTML='min -- &middot; max --';
@@ -326,7 +350,7 @@ const chart = new Chart(document.getElementById('c'), {
         borderColor:'#E8A755',
         backgroundColor:'rgba(232,167,85,0.12)',
         tension:0.35,
-        pointRadius:0,
+        pointRadius:3,
         pointHoverRadius:5,
         pointBackgroundColor:'#12151c',
         pointBorderColor:'#E8A755',
@@ -342,7 +366,7 @@ const chart = new Chart(document.getElementById('c'), {
         borderColor:'#5BC0BE',
         backgroundColor:'rgba(91,192,190,0.10)',
         tension:0.35,
-        pointRadius:0,
+        pointRadius:3,
         pointHoverRadius:5,
         pointBackgroundColor:'#12151c',
         pointBorderColor:'#5BC0BE',
@@ -367,6 +391,18 @@ const chart = new Chart(document.getElementById('c'), {
         enabled:true,
         algorithm:'lttb',
         samples:500
+      },
+      zoom:{
+        pan:{enabled:true,mode:'x',modifierKey:null},
+        zoom:{
+          wheel:{enabled:true},
+          pinch:{enabled:true},
+          drag:{enabled:false},
+          mode:'x'
+        },
+        limits:{
+          x:{min:'original',max:'original'}
+        }
       }
     },
     scales:{
@@ -395,12 +431,13 @@ async function refreshChart(start, end){
   const canvasEl = document.getElementById('c');
   const subEl = document.getElementById('chartSub');
   try{
-    const { data, error } = await sb
+    let q = sb
       .from(TABLE)
       .select('temp,hum,created_at')
-      .gte('created_at', start.toISOString())
-      .lte('created_at', end.toISOString())
-      .order('created_at', {ascending:true});
+      .gte('created_at', start.toISOString());
+    // open-ended when the range reaches today, so rows written after page load are included
+    if(!isEndToday(end)) q = q.lte('created_at', end.toISOString());
+    const { data, error } = await q.order('created_at', {ascending:true});
     if(error) throw error;
 
     if(!data || data.length===0){
@@ -444,6 +481,7 @@ async function init(){
 
   startEl.addEventListener('change', onRangeChange);
   endEl.addEventListener('change', onRangeChange);
+  document.getElementById('resetZoom').addEventListener('click', ()=>chart.resetZoom());
 
   await refreshRangeStats(currentRange.start, currentRange.end);
   await refreshChart(currentRange.start, currentRange.end);
@@ -468,18 +506,13 @@ function startInit(){
 }
 
 startInit();
-function isEndToday(end){
-  const now = new Date();
-  return end.getFullYear()===now.getFullYear() &&
-         end.getMonth()===now.getMonth() &&
-         end.getDate()===now.getDate();
-}
 
 setInterval(async ()=>{
   await refreshDials();
   if(currentRange && isEndToday(currentRange.end)){
-    await refreshRangeStats(currentRange.start, currentRange.end);
-    await refreshChart(currentRange.start, currentRange.end);
+    const end = new Date();
+    await refreshRangeStats(currentRange.start, end);
+    await refreshChart(currentRange.start, end);
   }
 }, 60000);
 </script>
