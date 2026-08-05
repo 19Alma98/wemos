@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Monitor DHT22 · Supabase</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-decimation"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -264,6 +265,7 @@ async function onRangeChange(){
   if(start > end) return;
   currentRange = {start, end};
   await refreshRangeStats(start, end);
+  await refreshChart(start, end);
 }
 
 async function refreshRangeStats(start, end){
@@ -313,6 +315,118 @@ async function refreshDials(){
   }
 }
 
+const chart = new Chart(document.getElementById('c'), {
+  type:'line',
+  data:{
+    labels: [],
+    datasets:[
+      {
+        label:'Temp. (°C)',
+        data: [],
+        borderColor:'#E8A755',
+        backgroundColor:'rgba(232,167,85,0.12)',
+        tension:0.35,
+        pointRadius:0,
+        pointHoverRadius:5,
+        pointBackgroundColor:'#12151c',
+        pointBorderColor:'#E8A755',
+        pointBorderWidth:2,
+        borderWidth:2,
+        fill:true,
+        yAxisID:'y',
+        parsing:false
+      },
+      {
+        label:'Umidità (%)',
+        data: [],
+        borderColor:'#5BC0BE',
+        backgroundColor:'rgba(91,192,190,0.10)',
+        tension:0.35,
+        pointRadius:0,
+        pointHoverRadius:5,
+        pointBackgroundColor:'#12151c',
+        pointBorderColor:'#5BC0BE',
+        pointBorderWidth:2,
+        borderWidth:2,
+        fill:true,
+        yAxisID:'y1',
+        parsing:false
+      }
+    ]
+  },
+  options:{
+    responsive:true,
+    animation:false,
+    interaction:{intersect:false,mode:'index'},
+    parsing:false,
+    plugins:{
+      legend:{
+        labels:{color:'#818a9c',boxWidth:10,boxHeight:10,usePointStyle:true,pointStyle:'circle'}
+      },
+      decimation:{
+        enabled:true,
+        algorithm:'lttb',
+        samples:500
+      }
+    },
+    scales:{
+      x:{
+        type:'time',
+        display:true,
+        grid:{color:'#222939'},
+        ticks:{color:'#818a9c'}
+      },
+      y:{
+        position:'left',
+        grid:{color:'#222939'},
+        ticks:{color:'#818a9c'}
+      },
+      y1:{
+        position:'right',
+        grid:{display:false},
+        ticks:{color:'#818a9c'}
+      }
+    }
+  }
+});
+
+async function refreshChart(start, end){
+  const msgEl = document.getElementById('chartMsg');
+  const canvasEl = document.getElementById('c');
+  const subEl = document.getElementById('chartSub');
+  try{
+    const { data, error } = await sb
+      .from(TABLE)
+      .select('temp,hum,created_at')
+      .gte('created_at', start.toISOString())
+      .lte('created_at', end.toISOString())
+      .order('created_at', {ascending:true});
+    if(error) throw error;
+
+    if(!data || data.length===0){
+      chart.data.datasets[0].data = [];
+      chart.data.datasets[1].data = [];
+      chart.update();
+      canvasEl.style.display='none';
+      msgEl.style.display='block';
+      msgEl.textContent='nessun dato in questo intervallo';
+      subEl.textContent='';
+      return;
+    }
+
+    chart.data.datasets[0].data = data.map(r=>({x:new Date(r.created_at), y:r.temp}));
+    chart.data.datasets[1].data = data.map(r=>({x:new Date(r.created_at), y:r.hum}));
+    chart.update();
+    canvasEl.style.display='block';
+    msgEl.style.display='none';
+    subEl.textContent = data.length+' letture';
+  }catch(e){
+    canvasEl.style.display='none';
+    msgEl.style.display='block';
+    msgEl.textContent='errore nel caricamento del grafico';
+  }
+}
+
 let currentRange = null;
 
 async function init(){
@@ -332,6 +446,7 @@ async function init(){
   endEl.addEventListener('change', onRangeChange);
 
   await refreshRangeStats(currentRange.start, currentRange.end);
+  await refreshChart(currentRange.start, currentRange.end);
   await refreshDials();
 }
 
