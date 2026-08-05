@@ -217,6 +217,12 @@ knolleary/PubSubClient
 * Alarm thresholds
 * Dark/light theme selection
 
+## Web Dashboard (`dashboard-web/`)
+
+Static, single-file dashboard (`dashboard-web/index.html`) that reads sensor history directly from Supabase. No build step — deploy the `dashboard-web/` directory as-is on Vercel.
+
+**Before deploying:** confirm in the Supabase dashboard that the `readings` table's Row Level Security policy grants the anon role `SELECT` only (no insert/update/delete) — the dashboard embeds the anon key client-side by design, and RLS is what keeps that safe, not secrecy of the key. Firmware writes need their own policy or a separate key.
+
 ## License
 
 MIT License
