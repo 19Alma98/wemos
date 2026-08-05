@@ -63,8 +63,8 @@ TemperatureHumiditySensor/
 │   │   ├── main.cpp
 │   │   ├── sensor.cpp
 │   │   ├── sensor.h
-│   │   ├── web.cpp
-│   │   ├── web.h
+│   │   ├── supabase.cpp
+│   │   ├── supabase.h
 │   │   ├── wifi.cpp
 │   │   ├── wifi.h
 │   │   ├── led.cpp
@@ -73,7 +73,9 @@ TemperatureHumiditySensor/
 │   │   └── config.h
 │   └── platformio.ini
 │
-└── dashboard-pc/
+└── dashboard-web/
+    ├── index.html
+    └── vercel.json
 ```
 
 ## Installation
@@ -203,7 +205,6 @@ Dependencies:
 ```ini
 adafruit/DHT sensor library
 adafruit/Adafruit Unified Sensor
-knolleary/PubSubClient
 ```
 
 ## Future Improvements
