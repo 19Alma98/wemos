@@ -194,7 +194,16 @@
   </div>
 
   <div class="panel range-panel">
-    <!-- date range picker filled in later task -->
+    <div class="range-fields">
+      <div class="range-field">
+        <label for="startDate">Da</label>
+        <input type="date" id="startDate">
+      </div>
+      <div class="range-field">
+        <label for="endDate">A</label>
+        <input type="date" id="endDate">
+      </div>
+    </div>
   </div>
 
   <div class="panel">
@@ -246,6 +255,16 @@ function defaultRange(){
 }
 
 function isoDate(d){ return d.toISOString().slice(0,10); }
+
+async function onRangeChange(){
+  const startEl = document.getElementById('startDate');
+  const endEl = document.getElementById('endDate');
+  const start = new Date(startEl.value + 'T00:00:00');
+  const end = new Date(endEl.value + 'T23:59:59.999');
+  if(start > end) return;
+  currentRange = {start, end};
+  await refreshRangeStats(start, end);
+}
 
 async function refreshRangeStats(start, end){
   const { data, error } = await sb
@@ -299,6 +318,19 @@ let currentRange = null;
 async function init(){
   await loadBounds();
   currentRange = defaultRange();
+
+  const startEl = document.getElementById('startDate');
+  const endEl = document.getElementById('endDate');
+  startEl.min = isoDate(dataMin);
+  startEl.max = isoDate(dataMax);
+  endEl.min = isoDate(dataMin);
+  endEl.max = isoDate(dataMax);
+  startEl.value = isoDate(currentRange.start);
+  endEl.value = isoDate(currentRange.end);
+
+  startEl.addEventListener('change', onRangeChange);
+  endEl.addEventListener('change', onRangeChange);
+
   await refreshRangeStats(currentRange.start, currentRange.end);
   await refreshDials();
 }
