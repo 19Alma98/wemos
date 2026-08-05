@@ -1,54 +1,57 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 
+#include "config.h"
 #include "wifi.h"
 #include "sensor.h"
-#include "web.h"
 #include "led.h"
-#include "mqtt.h"
+#include "supabase.h"
+
+void goToSleep() {
+  Serial.println("Deep sleep...");
+  Serial.flush();
+  ESP.deepSleep((uint64_t)DEEP_SLEEP_SECONDS * 1000000ULL);
+}
 
 void setup() {
   Serial.begin(115200);
   Serial.println("\nBOOT OK");
-  delay(2000);
 
   ledBegin();
   sensorBegin();
 
-  Serial.println("\nAvvio WiFi...");
+  Serial.println("Avvio WiFi...");
 
   wifiBegin();
 
+  unsigned long start = millis();
   while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
+    if (millis() - start > WIFI_CONNECT_TIMEOUT_MS) {
+      Serial.println("WiFi timeout, vado in sleep senza pubblicare.");
+      goToSleep();
+      return;
+    }
+    delay(200);
   }
 
-  Serial.println("\nWiFi connesso!");
-  Serial.print("IP assegnato: ");
+  ledOn();
+  Serial.print("WiFi connesso, IP: ");
   Serial.println(WiFi.localIP());
-
-  webBegin();
-
-  Serial.println("Web avviato");
-
-  mqttBegin();
-}
-
-void loop() {
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("WiFi disconnesso!");
-    delay(2000);
-    return;
-  }
 
   float t = getTemp();
   float h = getHum();
 
-  webLoop();
+  if (isnan(t) || isnan(h)) {
+    Serial.println("Lettura sensore non valida.");
+  } else {
+    Serial.printf("temp=%.1f hum=%.1f\n", t, h);
+    bool ok = supabasePostReading(t, h);
+    Serial.println(ok ? "Pubblicato su Supabase." : "Pubblicazione fallita.");
+  }
 
-  mqttLoop();
-  mqttPublish(t, h);
+  goToSleep();
+}
 
-  delay(2000);
+void loop() {
+  // unreachable: setup() always ends in deep sleep, which resets the chip on wake
 }

@@ -3,10 +3,6 @@
 #include "led.h"
 
 void wifiBegin(){
+  ledOff();
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  while(WiFi.status() != WL_CONNECTED){
-    delay(500);
-    ledOff();
-  }
-  ledOn();
 }

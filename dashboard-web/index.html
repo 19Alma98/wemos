@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monitor DHT22 · Supabase</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-decimation"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg:#12151c;
+    --surface:#1a1f2a;
+    --surface-2:#222939;
+    --text:#EDEBE4;
+    --muted:#818a9c;
+    --temp:#E8A755;
+    --hum:#5BC0BE;
+    --line:#272e3f;
+    --good:#6FCF97;
+    --bad:#E8687A;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;padding:0;
+    background:
+      radial-gradient(circle at 12% -10%, rgba(232,167,85,0.09), transparent 45%),
+      radial-gradient(circle at 92% 0%, rgba(91,192,190,0.09), transparent 45%),
+      var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    min-height:100vh;
+  }
+  .wrap{max-width:860px;margin:0 auto;padding:32px 20px 56px;}
+
+  .topbar{
+    display:flex;align-items:flex-start;justify-content:space-between;
+    margin-bottom:30px;gap:12px;
+  }
+  .eyebrow{
+    font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--muted);margin:0 0 6px;
+  }
+  h1{
+    font-size:22px;margin:0;font-weight:600;letter-spacing:-.01em;
+  }
+  .chip{
+    display:flex;align-items:center;gap:7px;
+    font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--muted);
+    background:var(--surface);border:1px solid var(--line);
+    border-radius:100px;padding:6px 12px 6px 10px;
+    white-space:nowrap;margin-top:2px;
+  }
+  .dot{
+    width:7px;height:7px;border-radius:50%;background:var(--good);
+    box-shadow:0 0 0 0 rgba(111,207,151,.6);
+    animation:pulse 2s infinite;
+    flex-shrink:0;
+  }
+  .dot.off{background:var(--bad);animation:none;box-shadow:none;}
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 0 rgba(111,207,151,.55);}
+    70%{box-shadow:0 0 0 7px rgba(111,207,151,0);}
+    100%{box-shadow:0 0 0 0 rgba(111,207,151,0);}
+  }
+
+  .dials{
+    display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;
+  }
+  .dial-card{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:18px;
+    padding:22px;
+    display:flex;align-items:center;gap:18px;
+  }
+  .dial{
+    position:relative;
+    width:104px;height:104px;flex-shrink:0;
+    border-radius:50%;
+    background:conic-gradient(var(--ring-color,var(--temp)) calc(var(--pct,0)*1%), var(--surface-2) 0);
+    display:flex;align-items:center;justify-content:center;
+    transition:background 0.6s ease;
+  }
+  .dial::before{
+    content:"";
+    position:absolute;inset:9px;
+    background:var(--surface);
+    border-radius:50%;
+  }
+  .dial .reading{
+    position:relative;z-index:1;
+    font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;
+    font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;
+    text-align:center;line-height:1.1;
+  }
+  .dial .reading sup{font-size:11px;font-weight:500;color:var(--muted);}
+  .dial-card.temp .dial{--ring-color:var(--temp);}
+  .dial-card.hum .dial{--ring-color:var(--hum);}
+  .dial-card.temp .reading{color:var(--temp);}
+  .dial-card.hum .reading{color:var(--hum);}
+
+  .dial-meta .label{
+    font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--muted);margin-bottom:6px;
+  }
+  .dial-meta .range{
+    font-size:12px;color:var(--muted);
+    font-variant-numeric:tabular-nums;
+  }
+  .dial-meta .trend{
+    font-size:12px;margin-top:4px;font-weight:600;
+  }
+  .trend.up{color:var(--temp);}
+  .trend.down{color:var(--hum);}
+  .trend.flat{color:var(--muted);font-weight:400;}
+
+  .panel{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:18px;
+    padding:20px 20px 8px;
+    margin-bottom:16px;
+  }
+  .panel-head{
+    display:flex;align-items:baseline;justify-content:space-between;
+    margin-bottom:14px;
+  }
+  .panel .label{
+    font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--muted);
+  }
+  .panel .sub{font-size:11px;color:var(--muted);}
+  canvas{width:100%!important;}
+
+  .range-panel{padding:16px 20px;}
+  .range-fields{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;}
+  .range-field{display:flex;flex-direction:column;gap:4px;}
+  .range-field label{font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;}
+  .range-field input[type=date]{
+    background:var(--surface-2);border:1px solid var(--line);border-radius:8px;
+    color:var(--text);padding:7px 10px;font-size:13px;font-family:inherit;
+    color-scheme:dark;
+  }
+  .reset-zoom-btn{
+    background:var(--surface-2);border:1px solid var(--line);border-radius:100px;
+    color:var(--muted);font-size:11px;letter-spacing:.04em;padding:4px 10px;
+    cursor:pointer;font-family:inherit;
+  }
+  .reset-zoom-btn:hover{color:var(--text);border-color:var(--muted);}
+  .chart-msg{
+    text-align:center;color:var(--muted);font-size:13px;
+    padding:40px 0;
+  }
+
+  footer{
+    margin-top:22px;text-align:center;font-size:11px;color:var(--muted);
+    letter-spacing:.04em;
+  }
+
+  @media (max-width:480px){
+    .dials{grid-template-columns:1fr;}
+    .dial-card{padding:18px;}
+    .range-fields{gap:10px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div>
+      <p class="eyebrow">Storico Supabase</p>
+      <h1>Monitor Sensore</h1>
+    </div>
+    <div class="chip"><span class="dot" id="statusDot"></span><span id="status">connessione&hellip;</span></div>
+  </div>
+
+  <div class="dials">
+    <div class="dial-card temp">
+      <div class="dial" id="tdial">
+        <div class="reading" id="t">--<sup>&deg;C</sup></div>
+      </div>
+      <div class="dial-meta">
+        <div class="label">Temperatura</div>
+        <div class="range" id="trange">min -- &middot; max --</div>
+        <div class="trend flat" id="ttrend">stabile</div>
+      </div>
+    </div>
+    <div class="dial-card hum">
+      <div class="dial" id="hdial">
+        <div class="reading" id="h">--<sup>%</sup></div>
+      </div>
+      <div class="dial-meta">
+        <div class="label">Umidit&agrave;</div>
+        <div class="range" id="hrange">min -- &middot; max --</div>
+        <div class="trend flat" id="htrend">stabile</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel range-panel">
+    <div class="range-fields">
+      <div class="range-field">
+        <label for="startDate">Da</label>
+        <input type="date" id="startDate">
+      </div>
+      <div class="range-field">
+        <label for="endDate">A</label>
+        <input type="date" id="endDate">
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <div class="label">Andamento</div>
+      <div style="display:flex;align-items:baseline;gap:10px;">
+        <div class="sub" id="chartSub">&nbsp;</div>
+        <button id="resetZoom" class="reset-zoom-btn" type="button">reset zoom</button>
+      </div>
+    </div>
+    <canvas id="c" height="130"></canvas>
+    <div class="chart-msg" id="chartMsg" style="display:none;"></div>
+  </div>
+
+</div>
+<script>
+const SUPABASE_URL = 'https://jslehtdlydurtckjdvmk.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpzbGVodGRseWR1cnRja2pkdm1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NDk4MDAsImV4cCI6MjEwMTUyNTgwMH0.C8zC4pGBUWQcmqdwRehMG0lFAnMfd30h0bXCEO7RUj8';
+const TABLE = 'readings';
+
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+function setTrend(el,delta){
+  el.classList.remove('up','down','flat');
+  if(Math.abs(delta)<0.05){
+    el.classList.add('flat'); el.textContent='stabile';
+  }else if(delta>0){
+    el.classList.add('up'); el.textContent='in salita · +'+delta.toFixed(1);
+  }else{
+    el.classList.add('down'); el.textContent='in discesa · '+delta.toFixed(1);
+  }
+}
+
+let dataMin=null, dataMax=null;
+
+async function loadBounds(){
+  const [{data:minRow, error:e1}, {data:maxRow, error:e2}] = await Promise.all([
+    sb.from(TABLE).select('created_at').order('created_at',{ascending:true}).limit(1),
+    sb.from(TABLE).select('created_at').order('created_at',{ascending:false}).limit(1)
+  ]);
+  if(e1 || e2 || !minRow?.length || !maxRow?.length) throw new Error('bounds query failed');
+  dataMin = new Date(minRow[0].created_at);
+  dataMax = new Date(maxRow[0].created_at);
+}
+
+function defaultRange(){
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const start = monthStart < dataMin ? dataMin : monthStart;
+  const end = dataMax;
+  return {start, end};
+}
+
+function isoDate(d){
+  const p = n => String(n).padStart(2,'0');
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());
+}
+
+function isEndToday(end){
+  const now = new Date();
+  return end.getFullYear()===now.getFullYear() &&
+         end.getMonth()===now.getMonth() &&
+         end.getDate()===now.getDate();
+}
+
+async function onRangeChange(){
+  const startEl = document.getElementById('startDate');
+  const endEl = document.getElementById('endDate');
+  // local-time bounds: the date picker shows local days, so the query must too
+  const start = new Date(startEl.value + 'T00:00:00.000');
+  const end = new Date(endEl.value + 'T23:59:59.999');
+  if(start > end) return;
+  currentRange = {start, end};
+  await refreshRangeStats(start, end);
+  await refreshChart(start, end);
+}
+
+async function refreshRangeStats(start, end){
+  let q = sb
+    .from(TABLE)
+    .select('temp,hum')
+    .gte('created_at', start.toISOString());
+  // open-ended when the range reaches today, so rows written after page load are included
+  if(!isEndToday(end)) q = q.lte('created_at', end.toISOString());
+  const { data, error } = await q;
+  if(error || !data || data.length===0){
+    document.getElementById('trange').innerHTML='min -- &middot; max --';
+    document.getElementById('hrange').innerHTML='min -- &middot; max --';
+    return;
+  }
+  const temps = data.map(r=>r.temp), hums = data.map(r=>r.hum);
+  const tmin=Math.min(...temps).toFixed(1), tmax=Math.max(...temps).toFixed(1);
+  const hmin=Math.min(...hums).toFixed(1), hmax=Math.max(...hums).toFixed(1);
+  document.getElementById('trange').innerHTML='min '+tmin+'&deg; &middot; max '+tmax+'&deg;';
+  document.getElementById('hrange').innerHTML='min '+hmin+'% &middot; max '+hmax+'%';
+}
+
+let lastTemp=null, lastHum=null;
+
+async function refreshDials(){
+  try{
+    const { data, error } = await sb
+      .from(TABLE)
+      .select('temp,hum,created_at')
+      .order('created_at', { ascending:false })
+      .limit(1);
+    if(error) throw error;
+    if(!data || data.length===0) throw new Error('no rows');
+
+    const d = data[0];
+    document.getElementById('t').innerHTML = d.temp.toFixed(1)+'<sup>&deg;C</sup>';
+    document.getElementById('h').innerHTML = d.hum.toFixed(1)+'<sup>%</sup>';
+    document.getElementById('tdial').style.setProperty('--pct', Math.min(100,Math.max(0,(d.temp/40)*100)));
+    document.getElementById('hdial').style.setProperty('--pct', Math.min(100,Math.max(0,d.hum)));
+    document.getElementById('status').textContent='live';
+    document.getElementById('statusDot').classList.remove('off');
+
+    if(lastTemp!==null) setTrend(document.getElementById('ttrend'), d.temp-lastTemp);
+    if(lastHum!==null) setTrend(document.getElementById('htrend'), d.hum-lastHum);
+    lastTemp=d.temp; lastHum=d.hum;
+  }catch(e){
+    document.getElementById('status').textContent='connessione persa';
+    document.getElementById('statusDot').classList.add('off');
+  }
+}
+
+const chart = new Chart(document.getElementById('c'), {
+  type:'line',
+  data:{
+    labels: [],
+    datasets:[
+      {
+        label:'Temp. (°C)',
+        data: [],
+        borderColor:'#E8A755',
+        backgroundColor:'rgba(232,167,85,0.12)',
+        tension:0.35,
+        pointRadius:3,
+        pointHoverRadius:5,
+        pointBackgroundColor:'#12151c',
+        pointBorderColor:'#E8A755',
+        pointBorderWidth:2,
+        borderWidth:2,
+        fill:true,
+        yAxisID:'y',
+        parsing:false
+      },
+      {
+        label:'Umidità (%)',
+        data: [],
+        borderColor:'#5BC0BE',
+        backgroundColor:'rgba(91,192,190,0.10)',
+        tension:0.35,
+        pointRadius:3,
+        pointHoverRadius:5,
+        pointBackgroundColor:'#12151c',
+        pointBorderColor:'#5BC0BE',
+        pointBorderWidth:2,
+        borderWidth:2,
+        fill:true,
+        yAxisID:'y1',
+        parsing:false
+      }
+    ]
+  },
+  options:{
+    responsive:true,
+    animation:false,
+    interaction:{intersect:false,mode:'index'},
+    parsing:false,
+    plugins:{
+      legend:{
+        labels:{color:'#818a9c',boxWidth:10,boxHeight:10,usePointStyle:true,pointStyle:'circle'}
+      },
+      decimation:{
+        enabled:true,
+        algorithm:'lttb',
+        samples:500
+      },
+      zoom:{
+        pan:{enabled:true,mode:'x',modifierKey:null},
+        zoom:{
+          wheel:{enabled:true},
+          pinch:{enabled:true},
+          drag:{enabled:false},
+          mode:'x'
+        },
+        limits:{
+          x:{min:'original',max:'original'}
+        }
+      }
+    },
+    scales:{
+      x:{
+        type:'time',
+        display:true,
+        grid:{color:'#222939'},
+        ticks:{color:'#818a9c'}
+      },
+      y:{
+        position:'left',
+        grid:{color:'#222939'},
+        ticks:{color:'#818a9c'}
+      },
+      y1:{
+        position:'right',
+        grid:{display:false},
+        ticks:{color:'#818a9c'}
+      }
+    }
+  }
+});
+
+async function refreshChart(start, end){
+  const msgEl = document.getElementById('chartMsg');
+  const canvasEl = document.getElementById('c');
+  const subEl = document.getElementById('chartSub');
+  try{
+    let q = sb
+      .from(TABLE)
+      .select('temp,hum,created_at')
+      .gte('created_at', start.toISOString());
+    // open-ended when the range reaches today, so rows written after page load are included
+    if(!isEndToday(end)) q = q.lte('created_at', end.toISOString());
+    const { data, error } = await q.order('created_at', {ascending:true});
+    if(error) throw error;
+
+    if(!data || data.length===0){
+      chart.data.datasets[0].data = [];
+      chart.data.datasets[1].data = [];
+      chart.update();
+      canvasEl.style.display='none';
+      msgEl.style.display='block';
+      msgEl.textContent='nessun dato in questo intervallo';
+      subEl.textContent='';
+      return;
+    }
+
+    chart.data.datasets[0].data = data.map(r=>({x:new Date(r.created_at), y:r.temp}));
+    chart.data.datasets[1].data = data.map(r=>({x:new Date(r.created_at), y:r.hum}));
+    chart.update();
+    canvasEl.style.display='block';
+    msgEl.style.display='none';
+    subEl.textContent = data.length+' letture';
+  }catch(e){
+    canvasEl.style.display='none';
+    msgEl.style.display='block';
+    msgEl.textContent='errore nel caricamento del grafico';
+  }
+}
+
+let currentRange = null;
+
+async function init(){
+  await loadBounds();
+  currentRange = defaultRange();
+
+  const startEl = document.getElementById('startDate');
+  const endEl = document.getElementById('endDate');
+  startEl.min = isoDate(dataMin);
+  startEl.max = isoDate(dataMax);
+  endEl.min = isoDate(dataMin);
+  endEl.max = isoDate(dataMax);
+  startEl.value = isoDate(currentRange.start);
+  endEl.value = isoDate(currentRange.end);
+
+  startEl.addEventListener('change', onRangeChange);
+  endEl.addEventListener('change', onRangeChange);
+  document.getElementById('resetZoom').addEventListener('click', ()=>chart.resetZoom());
+
+  await refreshRangeStats(currentRange.start, currentRange.end);
+  await refreshChart(currentRange.start, currentRange.end);
+  await refreshDials();
+}
+
+function showInitFailure(){
+  document.getElementById('status').textContent='errore caricamento';
+  document.getElementById('statusDot').classList.add('off');
+  const canvasEl = document.getElementById('c');
+  const msgEl = document.getElementById('chartMsg');
+  canvasEl.style.display='none';
+  msgEl.style.display='block';
+  msgEl.textContent='errore di connessione — nuovo tentativo in corso…';
+}
+
+function startInit(){
+  init().catch(()=>{
+    showInitFailure();
+    setTimeout(startInit, 10000);
+  });
+}
+
+startInit();
+
+setInterval(async ()=>{
+  await refreshDials();
+  if(currentRange && isEndToday(currentRange.end)){
+    const end = new Date();
+    await refreshRangeStats(currentRange.start, end);
+    await refreshChart(currentRange.start, end);
+  }
+}, 60000);
+</script>
+</body>
+</html>
