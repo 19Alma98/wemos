@@ -454,7 +454,20 @@ init().catch(() => {
   document.getElementById('status').textContent='errore caricamento';
   document.getElementById('statusDot').classList.add('off');
 });
-setInterval(refreshDials, 60000);
+function isEndToday(end){
+  const now = new Date();
+  return end.getFullYear()===now.getFullYear() &&
+         end.getMonth()===now.getMonth() &&
+         end.getDate()===now.getDate();
+}
+
+setInterval(async ()=>{
+  await refreshDials();
+  if(currentRange && isEndToday(currentRange.end)){
+    await refreshRangeStats(currentRange.start, currentRange.end);
+    await refreshChart(currentRange.start, currentRange.end);
+  }
+}, 60000);
 </script>
 </body>
 </html>
