@@ -450,10 +450,24 @@ async function init(){
   await refreshDials();
 }
 
-init().catch(() => {
+function showInitFailure(){
   document.getElementById('status').textContent='errore caricamento';
   document.getElementById('statusDot').classList.add('off');
-});
+  const canvasEl = document.getElementById('c');
+  const msgEl = document.getElementById('chartMsg');
+  canvasEl.style.display='none';
+  msgEl.style.display='block';
+  msgEl.textContent='errore di connessione — nuovo tentativo in corso…';
+}
+
+function startInit(){
+  init().catch(()=>{
+    showInitFailure();
+    setTimeout(startInit, 10000);
+  });
+}
+
+startInit();
 function isEndToday(end){
   const now = new Date();
   return end.getFullYear()===now.getFullYear() &&
