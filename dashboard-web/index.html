@@ -303,7 +303,10 @@ async function init(){
   await refreshDials();
 }
 
-init();
+init().catch(() => {
+  document.getElementById('status').textContent='errore caricamento';
+  document.getElementById('statusDot').classList.add('off');
+});
 setInterval(refreshDials, 60000);
 </script>
 </body>
