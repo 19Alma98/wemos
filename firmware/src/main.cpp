@@ -5,6 +5,7 @@
 #include "sensor.h"
 #include "web.h"
 #include "led.h"
+#include "mqtt.h"
 
 void setup() {
   Serial.begin(115200);
@@ -30,6 +31,8 @@ void setup() {
   webBegin();
 
   Serial.println("Web avviato");
+
+  mqttBegin();
 }
 
 void loop() {
@@ -43,6 +46,9 @@ void loop() {
   float h = getHum();
 
   webLoop();
+
+  mqttLoop();
+  mqttPublish(t, h);
 
   delay(2000);
 }

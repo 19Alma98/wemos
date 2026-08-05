@@ -7,4 +7,9 @@
 #define DHT_PIN D4
 #define DHT_TYPE DHT22
 
+#define MQTT_BROKER "192.168.1.100"  // hostname o IP del PC che esegue Mosquitto
+#define MQTT_PORT 1883
+#define MQTT_CLIENT_ID "wemos-dht22"
+#define MQTT_TOPIC "wemos/dht22"
+
 #endif
