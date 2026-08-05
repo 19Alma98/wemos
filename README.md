@@ -221,7 +221,7 @@ knolleary/PubSubClient
 
 Static, single-file dashboard (`dashboard-web/index.html`) that reads sensor history directly from Supabase. No build step — deploy the `dashboard-web/` directory as-is on Vercel.
 
-**Before deploying:** confirm in the Supabase dashboard that the `readings` table's Row Level Security policy grants the anon role `SELECT` only (no insert/update/delete) — the dashboard embeds the anon key client-side by design, and RLS is what keeps that safe, not secrecy of the key. Firmware writes need their own policy or a separate key.
+**Before deploying:** the firmware and the dashboard share the same anon key, so RLS on the `readings` table must allow both `SELECT` and `INSERT` for the anon role (no `UPDATE`/`DELETE`). The dashboard embeds this key client-side by design — RLS is what keeps that safe, not secrecy of the key. If you want the dashboard to be read-only, give the firmware a separate key/policy instead of reusing the anon key.
 
 ## License
 

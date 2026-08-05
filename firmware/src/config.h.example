@@ -10,7 +10,10 @@
 #define WIFI_CONNECT_TIMEOUT_MS 15000
 
 #define SUPABASE_URL "https://xxxxxxxxxxxx.supabase.co"
-#define SUPABASE_ANON_KEY "your-anon-key"
+// service_role key (Project Settings > API > "secret" key), NOT the anon key.
+// Bypasses RLS, so keep config.h out of git (already gitignored) and never
+// paste this key into dashboard-web or any other public/client-side file.
+#define SUPABASE_SERVICE_KEY "your-service-role-key"
 #define SUPABASE_TABLE "readings"
 
 #define DEEP_SLEEP_SECONDS 300

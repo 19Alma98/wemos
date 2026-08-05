@@ -15,8 +15,8 @@ bool supabasePostReading(float temp, float hum) {
   if (!http.begin(client, url)) return false;
 
   http.addHeader("Content-Type", "application/json");
-  http.addHeader("apikey", SUPABASE_ANON_KEY);
-  http.addHeader("Authorization", String("Bearer ") + SUPABASE_ANON_KEY);
+  http.addHeader("apikey", SUPABASE_SERVICE_KEY);
+  http.addHeader("Authorization", String("Bearer ") + SUPABASE_SERVICE_KEY);
   http.addHeader("Prefer", "return=minimal");
 
   char payload[64];
