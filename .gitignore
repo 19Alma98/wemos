@@ -8,3 +8,5 @@ dashboard-pc/.venv/
 dashboard-pc/.env
 dashboard-pc/**/__pycache__/
 dashboard-pc/logs/*.csv
+
+docs/superpowers/
