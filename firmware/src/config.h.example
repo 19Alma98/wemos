@@ -16,6 +16,6 @@
 #define SUPABASE_SERVICE_KEY "your-service-role-key"
 #define SUPABASE_TABLE "readings"
 
-#define DEEP_SLEEP_SECONDS 300
+#define DEEP_SLEEP_SECONDS 3600
 
 #endif
